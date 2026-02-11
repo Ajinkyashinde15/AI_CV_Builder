@@ -5,34 +5,25 @@ def resume_prompt(cv_text: str, job_description: str) -> str:
 You are a senior professional résumé writer.
 
 GOAL
-Rewrite the candidate's CV into a concise, modern, ATS-friendly résumé tailored to the job description.
+
+I want you to act as a professional CV editor and technical hiring strategist. 
+You will receive the full text of a candidate's CV and a job description. 
+Your task is to reverse-engineer the CV to align as tightly as possible with the job requirements Specifically: 
+- Analyze the job description to extract required and preferred skills, technologies, and responsibilities. 
+- Reframe the CV to emphasize matching technical experience, achievements, and capabilities—even if indirect. Use strategic positioning to connect relevant experience. 
+- Mirror the language and terminology used in the job description to increase alignment and keyword match. 
+- Quantify accomplishments and results where possible. 
+- Remove or minimize unrelated content unless it supports core competencies or potential. 
+- Maintain professional formatting and tone appropriate for a technical role. Use bullet points, concise phrasing, and a clean layout. 
+- Do not fabricate experience. Focus on positioning truth to maximize impact. 
+Input: Candidate CV (text) Job description (text)
 
 STRICT OUTPUT FORMAT (DOCX-SAFE)
 - OUTPUT MUST BE PURE PLAIN TEXT. Do NOT use Markdown (#, ##, **bold**, *, `, code fences), tables, or hyperlinks.
-- SECTION HEADERS: UPPERCASE on their own line (e.g., SUMMARY, CORE SKILLS, EXPERIENCE, PROJECTS, EDUCATION, CERTIFICATIONS).
 - BULLETS: Use the simple bullet character "•" (U+2022) or a hyphen "-". One bullet per line. No nested bullets.
 - SEPARATION: One blank line between sections; no extra blank lines inside a section (except between roles).
 - DATES: Use MMM YYYY (e.g., Jan 2022) or YYYY–YYYY; avoid ambiguous formats.
-- QUANTIFY IMPACT where possible (%, time saved, throughput, latency, cost).
-- LENGTH: Aim for ~1–2 pages equivalent of plain text (roughly 600–1,000 words).
 - NO personal data fabrication (keep only what is present or reasonably inferred). Do NOT invent employers, degrees, or dates.
-
-CONTENT REQUIREMENTS
-- SUMMARY (3–5 lines): Role, years of experience, relevant domains/tech stack aligned to the JD.
-- CORE SKILLS: A compact bullet list of technologies, frameworks, tools, and methods relevant to the JD.
-- EXPERIENCE: Reverse-chronological roles. For each role:
-  Company, Location (if known)
-  Title
-  Dates
-  4–7 bullets: action + impact, with metrics when available, aligned to the JD keywords.
-- PROJECTS (optional if not much experience): 2–3 bullets per project, focus on outcomes and tech.
-- EDUCATION: Degree, Institution, Year (no GPA unless provided).
-- CERTIFICATIONS: Only if present in the CV or common/likely from the candidate; do not invent.
-
-STYLE GUIDELINES
-- Short, scannable sentences; strong action verbs; avoid filler.
-- Prefer exact tool/tech names present in CV or clearly required by the JD.
-- No first person, no pronouns, no fluff.
 
 JOB DESCRIPTION
 {job_description}
