@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+boto3
+python-docx
+langgraph
+langchain
+langchain-google-genai         # for Gemini
+langchain-huggingface          # for Hugging Face Inference API
+pydantic
+python-dotenv

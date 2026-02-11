@@ -1,0 +1,50 @@
+version: "3.9"
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+    volumes:
+      - "./.localstack:/var/lib/localstack"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: resume-backend
+    environment:
+      - ENV=${ENV:-local}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET=ai-resume-cv-bucket
+      - S3_CV_PREFIX=${S3_CV_PREFIX:-cvs/}
+      - S3_RESUME_PREFIX=${S3_RESUME_PREFIX:-resumes/}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://localstack:4566}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-pro}
+    depends_on:
+      - localstack
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: resume-frontend
+    environment:
+      - BACKEND_URL=${BACKEND_URL:-http://backend:8000}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET=ai-resume-cv-bucket
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://localstack:4566}
+    depends_on:
+      - backend
+    ports:
+      - "8501:8501"
