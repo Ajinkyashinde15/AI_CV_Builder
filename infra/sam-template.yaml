@@ -1,0 +1,372 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2010-05-13
+Description: 'AI CV Builder - Lambda Deployment Template (SAM)'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment
+
+  S3BucketName:
+    Type: String
+    Default: ai-resume-cv-bucket
+    Description: S3 bucket for CV storage
+
+  S3CvPrefix:
+    Type: String
+    Default: rawcvs/
+    Description: S3 prefix for input CVs
+
+  S3ResumePrefix:
+    Type: String
+    Default: processedresumes/
+    Description: S3 prefix for output resumes
+
+  DynamoDBTableName:
+    Type: String
+    Default: CvBuilderDb
+    Description: DynamoDB table for trace storage
+
+  SecretsManagerName:
+    Type: String
+    Default: CvBuilderSecretsManager
+    Description: Secrets Manager secret name for API keys
+
+  LLMProvider:
+    Type: String
+    Default: hf_endpoint
+    AllowedValues:
+      - gemini
+      - hf_endpoint
+    Description: LLM provider (Gemini or Hugging Face)
+
+  LLMModel:
+    Type: String
+    Default: Qwen/Qwen2.5-14B-Instruct-1M
+    Description: Default LLM model name
+
+  GeminiModel:
+    Type: String
+    Default: gemini-1.5-flash
+    Description: Gemini model name (if using Gemini)
+
+  HFMaxTokens:
+    Type: Number
+    Default: 1024
+    Description: Max tokens for HF model generation
+
+  LambdaMemory:
+    Type: Number
+    Default: 512
+    MinValue: 128
+    MaxValue: 10240
+    Description: Lambda memory allocation (MB)
+
+  LambdaTimeout:
+    Type: Number
+    Default: 300
+    MinValue: 3
+    MaxValue: 900
+    Description: Lambda timeout (seconds)
+
+  ECRImageUri:
+    Type: String
+    Description: ECR image URI for backend (format: 123456789.dkr.ecr.us-east-1.amazonaws.com/cv-builder:latest)
+
+Globals:
+  Function:
+    Timeout: !Ref LambdaTimeout
+    MemorySize: !Ref LambdaMemory
+    Runtime: python3.11
+    Environment:
+      Variables:
+        ENV: !Ref Environment
+        AWS_REGION: !Ref AWS::Region
+        S3_BUCKET: !Ref S3BucketName
+        S3_CV_PREFIX: !Ref S3CvPrefix
+        S3_RESUME_PREFIX: !Ref S3ResumePrefix
+        TRACE_TABLE: !Ref DynamoDBTableName
+        SECRETS_MANAGER_NAME: !Ref SecretsManagerName
+        LLM_PROVIDER: !Ref LLMProvider
+        GEMINI_MODEL: !Ref GeminiModel
+        HF_MODEL: !Ref LLMModel
+        HF_MAX_NEW_TOKENS: !Sub '${HFMaxTokens}'
+        HF_TEMPERATURE: '0.2'
+        HF_TOP_P: '0.95'
+
+Resources:
+  # ============================================================================
+  # LAMBDA EXECUTION ROLE
+  # ============================================================================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}/*'
+        
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt DynamoDBTable.Arn
+        
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretsManagerName}-*'
+
+  # ============================================================================
+  # LAMBDA FUNCTION (API Handler)
+  # ============================================================================
+  ResumeGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'cv-builder-${Environment}'
+      Description: AI CV Builder - Resume Generation Lambda
+      Role: !GetAtt LambdaExecutionRole.Arn
+      PackageType: Image
+      ImageUri: !Ref ECRImageUri
+      Handler: app.main.handler
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemory
+      Environment:
+        Variables:
+          ENV: !Ref Environment
+          AWS_REGION: !Ref AWS::Region
+          S3_BUCKET: !Ref S3BucketName
+          S3_CV_PREFIX: !Ref S3CvPrefix
+          S3_RESUME_PREFIX: !Ref S3ResumePrefix
+          TRACE_TABLE: !Ref DynamoDBTableName
+          SECRETS_MANAGER_NAME: !Ref SecretsManagerName
+          LLM_PROVIDER: !Ref LLMProvider
+          GEMINI_MODEL: !Ref GeminiModel
+          HF_MODEL: !Ref LLMModel
+          HF_MAX_NEW_TOKENS: !Sub '${HFMaxTokens}'
+      Events:
+        ListCVsEvent:
+          Type: Api
+          Properties:
+            Path: /resume/list-cvs
+            Method: GET
+            RestApiId: !Ref ResumeApi
+        GenerateEvent:
+          Type: Api
+          Properties:
+            Path: /resume/generate
+            Method: POST
+            RestApiId: !Ref ResumeApi
+        VisualizationEvent:
+          Type: Api
+          Properties:
+            Path: /resume/graph-visualization
+            Method: GET
+            RestApiId: !Ref ResumeApi
+        HealthEvent:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: GET
+            RestApiId: !Ref ResumeApi
+
+  # ============================================================================
+  # API GATEWAY
+  # ============================================================================
+  ResumeApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'cv-builder-api-${Environment}'
+      Description: AI CV Builder API
+      StageName: !Ref Environment
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          ThrottleSettings:
+            BurstLimit: 5000
+            RateLimit: 2000
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/cv-builder-${Environment}'
+      RetentionInDays: 30
+
+  # ============================================================================
+  # DYNAMODB TABLE
+  # ============================================================================
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DynamoDBTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: CVBuilder
+
+  DynamoDBTableLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/dynamodb/${DynamoDBTableName}'
+      RetentionInDays: 7
+
+  # ============================================================================
+  # SECRETS MANAGER
+  # ============================================================================
+  SecretsManagerSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Ref SecretsManagerName
+      Description: API keys for CV Builder (HF and Gemini)
+      SecretString: !Sub |
+        {
+          "HF_API_TOKEN": "${HFApiToken}",
+          "GEMINI_API_KEY": "${GeminiApiKey}"
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: CVBuilder
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS
+  # ============================================================================
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'cv-builder-lambda-errors-${Environment}'
+      AlarmDescription: Lambda function errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ResumeGeneratorFunction
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'cv-builder-lambda-duration-${Environment}'
+      AlarmDescription: Lambda function duration warning
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 250000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ResumeGeneratorFunction
+
+  DynamoDBThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'cv-builder-dynamodb-throttle-${Environment}'
+      AlarmDescription: DynamoDB throttling detected
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+
+  # ============================================================================
+  # OUTPUTS
+  # ============================================================================
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint
+    Value: !Sub 'https://${ResumeApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub 'CVBuilder-ApiEndpoint-${Environment}'
+
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ResumeGeneratorFunction.Arn
+    Export:
+      Name: !Sub 'CVBuilder-LambdaArn-${Environment}'
+
+  DynamoDBTableName:
+    Description: DynamoDB table name
+    Value: !Ref DynamoDBTable
+    Export:
+      Name: !Sub 'CVBuilder-DynamoDBTable-${Environment}'
+
+  DynamoDBTableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt DynamoDBTable.Arn
+    Export:
+      Name: !Sub 'CVBuilder-DynamoDBArn-${Environment}'
+
+  SecretsManagerArn:
+    Description: Secrets Manager secret ARN
+    Value: !GetAtt SecretsManagerSecret.Arn
+    Export:
+      Name: !Sub 'CVBuilder-SecretsArn-${Environment}'
+
+  S3BucketName:
+    Description: S3 bucket for CV storage
+    Value: !Ref S3BucketName
+    Export:
+      Name: !Sub 'CVBuilder-S3Bucket-${Environment}'

@@ -16,6 +16,7 @@ A production-ready, cost-effective resume tailoring system. It ingests CVs from 
 - [Environment Variables](#environment-variables)
 - [Local Development](#local-development)
 - [Docker (Backend + UI) & Compose](#docker-backend--ui--compose)
+- [AWS Lambda Deployment](#aws-lambda-deployment)
 - [CloudFormation Deployment (ECR/ECS/ALB)](#cloudformation-deployment-ecrecsalb)
 - [FastAPI Endpoints](#fastapi-endpoints)
 - [Streamlit App](#streamlit-app)
@@ -57,9 +58,14 @@ flowchart LR
 - **LangGraph**: deterministic, debuggable pipeline (extract → generate → write → upload).
 - **Models**: Plug-and-play **Gemini** (e.g., `gemini-1.5-flash` for cost-efficiency) or **Hugging Face** (e.g., `mistral-7b-instruct`, `Llama-3` via Inference API or endpoints).
 - **S3-native**: Input and output folders; supports batch processing.
+- **Secrets Management**: AWS Secrets Manager integration with automatic caching during Lambda warm starts.
 - **Output formats**: DOCX (default). Optional PDF via **LibreOffice headless** in Docker.
-- **Production-ready**: FastAPI with pydantic schemas, robust logging, retries, health endpoints, Docker images, and CloudFormation for ECS Fargate + ALB.
-- **Security**: Minimal IAM, private environment variables, no resume content in logs.
+- **Deployment Options**: 
+  - **Lambda** (serverless, pay-per-invocation) **Recommended for cost-efficiency**
+  - **ECS Fargate** (containerized, always-on)
+  - **Local Docker Compose** (development)
+- **Production-ready**: FastAPI with pydantic schemas, robust logging, retries, health endpoints, CloudFormation/SAM for IaC.
+- **Security**: Minimal IAM, secret values stored in AWS Secrets Manager (not in environment variables), no resume content in logs.
 
 ---
 
@@ -67,8 +73,11 @@ flowchart LR
 - **Backend**: FastAPI, Uvicorn/Gunicorn, LangGraph
 - **UI**: Streamlit
 - **LLMs**: Gemini (Google Generative AI) **or** Hugging Face (Inference API / Inference Endpoints)
-- **Storage**: AWS S3
-- **Container/Deploy**: Docker, AWS CloudFormation (ECR/ECS/ALB/CloudWatch)
+- **Storage**: AWS S3, AWS DynamoDB (trace storage)
+- **Secrets**: AWS Secrets Manager
+- **Container/Deploy**: Docker, AWS Lambda, AWS SAM (Serverless Application Model)
+- **Monitoring**: AWS CloudWatch Logs, CloudWatch Alarms
+- **Optional ECS Deploy**: AWS CloudFormation (ECR/ECS/ALB/CloudWatch)
 
 ---
 
@@ -595,6 +604,381 @@ Example test matrix:
 - Caching to avoid reprocessing unchanged CVs (ETag-based)
 - Parallelism (async/batch) for faster throughput
 - Per-candidate configuration (e.g., role preferences)
+
+---
+
+## AWS Lambda Deployment
+
+This application can be deployed as a serverless AWS Lambda function with automatic secret management through AWS Secrets Manager. The Lambda function serves the FastAPI application via API Gateway, with all CV processing handled through S3 and resume traces stored in DynamoDB.
+
+### Architecture Overview (Lambda)
+
+```mermaid
+graph TB
+    User["User / Automation"]
+    AG["API Gateway"]
+    Lambda["Lambda Function (FastAPI + Mangum)"]
+    SM["Secrets Manager"]
+    S3["S3 Bucket"]
+    DDB["DynamoDB"]
+    LLM["LLM Provider (Gemini/HuggingFace)"]
+    
+    User -->|HTTP| AG
+    AG -->|Invoke| Lambda
+    Lambda -->|Get Secrets| SM
+    Lambda -->|Read/Write CVs| S3
+    Lambda -->|Trace Storage| DDB
+    Lambda -->|Call API| LLM
+    
+    style Lambda fill:#ff9900
+    style SM fill:#232f3e
+    style S3 fill:#232f3e
+    style DDB fill:#232f3e
+```
+
+### Key Features
+- **Secrets Caching**: Secrets are fetched once during Lambda cold start and cached in global memory for warm invocations (no repeated Secrets Manager calls).
+- **Environment Detection**: Automatic detection of `local` (LocalStack) vs `dev` (AWS) environments with proper boto3 endpoint configuration.
+- **Scalability**: Lambda automatically scales based on API gateway requests.
+- **Cost-Effective**: Pay only for actual invocations; no idle server costs.
+- **CloudWatch Integration**: Automatic logging and monitoring.
+
+### Prerequisites for AWS Deployment
+
+1. **AWS Account** with appropriate IAM permissions
+2. **AWS CLI** v2+ configured with credentials
+3. **Docker** (to build the container image)
+4. **AWS SAM CLI** for deployment
+5. **Git** for version control
+
+Install AWS SAM:
+```bash
+# macOS / Linux
+brew install aws-sam-cli
+
+# Windows (PowerShell with admin)
+choco install aws-sam-cli
+# or manually download from: https://aws.amazon.com/serverless/sam/
+```
+
+### Step 1: Build and Push Docker Image to ECR
+
+#### Automated Deployment (Recommended)
+
+**On Windows (PowerShell):**
+```powershell
+cd scripts
+.\deploy-lambda.ps1 -Environment dev -AwsRegion us-east-1
+```
+
+**On Linux/macOS (Bash):**
+```bash
+cd scripts
+chmod +x deploy-lambda.sh
+./deploy-lambda.sh dev
+```
+
+#### Manual Steps
+
+1. **Create ECR Repository:**
+```bash
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+AWS_REGION=us-east-1
+ECR_REPO_NAME=cv-builder
+
+aws ecr create-repository \
+    --repository-name $ECR_REPO_NAME \
+    --region $AWS_REGION \
+    --image-scanning-configuration scanOnPush=true
+```
+
+2. **Authenticate Docker with ECR:**
+```bash
+aws ecr get-login-password --region $AWS_REGION | \
+    docker login --username AWS --password-stdin \
+    $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+```
+
+3. **Build Docker Image:**
+```bash
+docker build \
+    -f backend/Dockerfile.lambda \
+    -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:latest \
+    .
+```
+
+4. **Push to ECR:**
+```bash
+docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:latest
+```
+
+### Step 2: Create/Update Secrets in AWS Secrets Manager
+
+```bash
+SECRET_NAME="CvBuilderSecretsManager"
+AWS_REGION="us-east-1"
+
+# Create secret with both API keys
+aws secretsmanager create-secret \
+    --name $SECRET_NAME \
+    --description "API keys for CV Builder (HF and Gemini)" \
+    --secret-string '{
+        "HF_API_TOKEN": "your-hf-token-here",
+        "GEMINI_API_KEY": "your-gemini-key-here"
+    }' \
+    --region $AWS_REGION
+
+# Or update existing secret
+aws secretsmanager update-secret \
+    --secret-id $SECRET_NAME \
+    --secret-string '{
+        "HF_API_TOKEN": "your-hf-token-here",
+        "GEMINI_API_KEY": "your-gemini-key-here"
+    }' \
+    --region $AWS_REGION
+```
+
+### Step 3: Deploy with SAM
+
+```bash
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+AWS_REGION=us-east-1
+ENVIRONMENT=dev
+IMAGE_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/cv-builder:latest
+
+sam deploy \
+    --template-file infra/sam-template.yaml \
+    --stack-name "cv-builder-${ENVIRONMENT}" \
+    --parameter-overrides \
+        Environment=$ENVIRONMENT \
+        ECRImageUri=$IMAGE_URI \
+        HFApiToken="your-hf-token" \
+        GeminiApiKey="your-gemini-key" \
+    --region $AWS_REGION \
+    --capabilities CAPABILITY_IAM
+```
+
+### Step 4: Verify Deployment
+
+```bash
+# Get Stack Outputs
+aws cloudformation describe-stacks \
+    --stack-name "cv-builder-dev" \
+    --region us-east-1 \
+    --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
+    --output table
+
+# Test API Endpoint
+API_ENDPOINT=$(aws cloudformation describe-stacks \
+    --stack-name "cv-builder-dev" \
+    --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+    --output text)
+
+curl $API_ENDPOINT/resume/list-cvs
+```
+
+### Understanding Secrets Caching in Lambda
+
+The application uses a global-scope secrets cache that persists across Lambda invocations during warm starts:
+
+```python
+# config.py - Global cache (persists during warm starts)
+_secrets_cache: dict[str, str] = {}
+
+def get_secrets_from_manager(secret_name, region, endpoint_url):
+    # Return from cache if available (warm Lambda start)
+    if _secrets_cache:
+        return _secrets_cache
+    
+    # Fetch from Secrets Manager (cold start)
+    sm_client = boto3.client("secretsmanager", ...)
+    secret_dict = json.loads(sm_client.get_secret_value(...)["SecretString"])
+    _secrets_cache.update(secret_dict)
+    return secret_dict
+```
+
+**Benefits:**
+- **Cold Start**: Initial invocation fetches secrets from Secrets Manager (~100-200ms)
+- **Warm Start**: Subsequent invocations use cached secrets (~1-2ms)
+- **Security**: Secrets never logged; stored only in Lambda memory
+- **Multi-Invocation**: Each Lambda container maintains its own cache
+
+### Environment-Specific Deployment
+
+#### Local Development (LocalStack)
+
+No changes needed! The setup-local.ps1 script already:
+1. Creates LocalStack Secrets Manager  
+2. Creates SecretImaginary secret
+3. Configures all services with `http://localhost:4566` endpoints
+
+Run:
+```powershell
+cd scripts
+.\setup-local.ps1 -HFApiToken "your-hf-token" -GeminiApiKey "your-gemini-key"
+```
+
+#### AWS Dev Environment
+
+Deploy with:
+```bash
+./scripts/deploy-lambda.sh dev
+```
+
+**Key Differences from Local:**
+- Uses real AWS Secrets Manager (not LocalStack)
+- Uses real AWS S3 (not LocalStack)  
+- Uses real AWS DynamoDB (not LocalStack)
+- Automatic IAM role assumption by Lambda
+
+#### Configuration by Environment
+
+The `config.py` automatically detects the environment:
+
+```python
+ENV = os.getenv("ENV", "local")  # "local" or "dev"
+
+# Local (LocalStack)
+if ENV == "local":
+    AWS_ENDPOINT_URL = "http://localhost:4566"
+    # Fetches secrets from LocalStack Secrets Manager
+    
+# Dev (AWS)
+elif ENV == "dev":
+    AWS_ENDPOINT_URL = None  # Uses AWS endpoints
+    # Fetches secrets from AWS Secrets Manager
+```
+
+### Lambda Environment Variables
+
+Set these in the SAM template or Lambda console:
+
+```
+ENV=dev
+AWS_REGION=us-east-1
+S3_BUCKET=ai-resume-cv-bucket
+S3_CV_PREFIX=rawcvs/
+S3_RESUME_PREFIX=processedresumes/
+TRACE_TABLE=CvBuilderDb
+SECRETS_MANAGER_NAME=CvBuilderSecretsManager
+LLM_PROVIDER=hf_endpoint  # or "gemini"
+GEMINI_MODEL=gemini-1.5-flash
+HF_MODEL=Qwen/Qwen2.5-14B-Instruct-1M
+```
+
+**Secrets NOT in Environment Variables:**
+- `HF_API_TOKEN` → Fetched from Secrets Manager
+- `GEMINI_API_KEY` → Fetched from Secrets Manager
+
+### Monitoring and Troubleshooting
+
+#### View Lambda Logs
+
+```bash
+# Tail logs in real-time
+aws logs tail /aws/lambda/cv-builder-dev --follow
+
+# View specific invocation logs
+aws logs tail /aws/lambda/cv-builder-dev --since 1h
+```
+
+#### CloudWatch Metrics
+
+```bash
+# Get invocation count
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/Lambda \
+    --metric-name Invocations \
+    --dimensions Name=FunctionName,Value=cv-builder-dev \
+    --start-time 2024-02-14T00:00:00Z \
+    --end-time 2024-02-15T00:00:00Z \
+    --period 3600 \
+    --statistics Sum
+```
+
+#### Test Lambda Function
+
+```bash
+# Invoke directly
+aws lambda invoke \
+    --function-name cv-builder-dev \
+    --payload '{"path": "/resume/list-cvs", "httpMethod": "GET"}' \
+    response.json
+    
+cat response.json
+```
+
+#### Common Issues
+
+**Issue: "Secrets Manager permission denied"**
+- Verify Lambda execution role has `secretsmanager:GetSecretValue` permission
+- Check secret name matches (case-sensitive)
+
+**Issue: "S3 access denied"**
+- Verify Lambda execution role includes S3 GetObject/PutObject permissions
+- Check bucket exists and is accessible
+
+**Issue: "DynamoDB table not found"**
+- Verify table name matches (case-sensitive)
+- Confirm table was created by SAM deployment
+
+**Issue: "LLM API errors"**
+- Verify API keys in Secrets Manager are valid
+- Check rate limits with LLM provider
+- Review CloudWatch logs for detailed error messages
+
+### Updating Deployment
+
+To update the Lambda function after code changes:
+
+```bash
+# Rebuild and push image
+docker build -f backend/Dockerfile.lambda -t $IMAGE_URI .
+docker push $IMAGE_URI
+
+# Re-deploy with SAM
+sam deploy \
+    --stack-name "cv-builder-dev" \
+    --template-file infra/sam-template.yaml \
+    --region us-east-1
+```
+
+### Cleanup
+
+To tear down the deployment:
+
+```bash
+# Delete CloudFormation stack
+aws cloudformation delete-stack \
+    --stack-name "cv-builder-dev" \
+    --region us-east-1
+
+# Wait for deletion (optional)
+aws cloudformation wait stack-delete-complete \
+    --stack-name "cv-builder-dev" \
+    --region us-east-1
+
+# Delete ECR repository (careful: removes all images)
+aws ecr delete-repository \
+    --repository-name cv-builder \
+    --region us-east-1 \
+    --force
+
+# Delete Secrets Manager secret
+aws secretsmanager delete-secret \
+    --secret-id CvBuilderSecretsManager \
+    --region us-east-1 \
+    --force-delete-without-recovery
+```
+
+### Costs Estimation
+
+**Typical Monthly Cost (Dev Environment):**
+- Lambda: ~$0.20 (1M free requests/month + small invocations)
+- S3: ~$1.00 (storage of CVs/resumes)
+- DynamoDB: ~$1.25 (on-demand, minimal traffic)
+- Secrets Manager: ~$0.40 (first 30 days free)
+- **Total: ~$2-5/month** (significantly cheaper than ECS)
 
 ---
 

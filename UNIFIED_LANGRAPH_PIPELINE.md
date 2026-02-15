@@ -160,15 +160,15 @@ class State(TypedDict, total=False):
 ### Graph Invocation
 ```python
 initial_state = {
-    "file_path": "cvs/john_smith.docx",  # From S3 listing
+    "file_path": "rawcvs/john_smith.docx",  # From S3 listing
     "job_description": "Senior Python Engineer...",
     "bucket": "ai-resume-cv-bucket",
-    "cv_prefix": "cvs/",
-    "resume_prefix": "resumes/",
+    "cv_prefix": "rawcvs/",
+    "resume_prefix": "processedresumes/",
 }
 
 result = graph.invoke(initial_state)
-# result["output_key"] = "resumes/john_smith_resume.docx"
+# result["output_key"] = "processedresumes/john_smith_resume.docx"
 ```
 
 ### State Evolution Through Pipeline
@@ -176,11 +176,11 @@ result = graph.invoke(initial_state)
 ```
 [INITIAL] →
 {
-  file_path: "cvs/john_smith.docx",
+  file_path: "rawcvs/john_smith.docx",
   job_description: "Senior Python Engineer...",
   bucket: "ai-resume-cv-bucket",
-  cv_prefix: "cvs/",
-  resume_prefix: "resumes/"
+  cv_prefix: "rawcvs/",
+  resume_prefix: "processedresumes/"
 }
 
 [AFTER Extract] →
@@ -204,7 +204,7 @@ result = graph.invoke(initial_state)
 [AFTER Upload - FINAL] →
 {
   ...(previous fields)...
-  output_key: "resumes/john_smith_resume.docx"
+  output_key: "processedresumes/john_smith_resume.docx"
 }
 ```
 
@@ -236,12 +236,12 @@ Content-Type: application/json
 ```json
 {
     "processed_keys": [
-        "cvs/john.docx",
-        "cvs/jane.docx"
+        "rawcvs/john.docx",
+        "rawcvs/jane.docx"
     ],
     "output_keys": [
-        "resumes/john_resume.docx",
-        "resumes/jane_resume.docx"
+        "processedresumes/john_resume.docx",
+        "processedresumes/jane_resume.docx"
     ]
 }
 ```
@@ -304,8 +304,8 @@ Resume Generation Pipeline
 ╚════════════════════════════════════════════════════════════╝
 ============================================================
 
-[1/2] Processing cvs/john.docx...
-[EXTRACT] Starting extraction from cvs/john.docx
+[1/2] Processing rawcvs/john.docx...
+[EXTRACT] Starting extraction from rawcvs/john.docx
 [EXTRACT] Downloaded to /tmp/john.docx
 [EXTRACT] Successfully extracted 3245 characters
 [GENERATE] Starting resume generation
@@ -313,11 +313,11 @@ Resume Generation Pipeline
 [WRITE] Starting DOCX creation
 [WRITE] DOCX written to /tmp/john_resume.docx
 [UPLOAD] Starting S3 upload
-[UPLOAD] Successfully uploaded to resumes/john_resume.docx
-✓ Successfully processed cvs/john.docx
+[UPLOAD] Successfully uploaded to processedresumes/john_resume.docx
+✓ Successfully processed rawcvs/john.docx
 
-[2/2] Processing cvs/jane.docx...
-✓ Successfully processed cvs/jane.docx
+[2/2] Processing rawcvs/jane.docx...
+✓ Successfully processed rawcvs/jane.docx
 
 ============================================================
 Pipeline Complete: 2/2 files processed

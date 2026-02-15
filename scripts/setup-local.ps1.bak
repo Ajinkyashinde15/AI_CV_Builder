@@ -167,7 +167,7 @@ $secretJson = $secretValue | ConvertTo-Json -Compress
 
 aws secretsmanager create-secret `
   --name $SecretName `
-  --secret-string $secretJson `
+  --secret-string $SecretValue `
   --endpoint-url $LocalStackEndpoint `
 | Out-Null
 

@@ -12,7 +12,7 @@ def s3_client():
     if _session is None:
         _session = boto3.session.Session(region_name=settings.AWS_REGION)
     params = {"config": Config(retries={"max_attempts": 3, "mode": "standard"})}
-    endpoint = settings.S3_ENDPOINT_URL
+    endpoint = settings.AWS_ENDPOINT_URL
     if endpoint:
         params["endpoint_url"] = endpoint
     return _session.client("s3", **params)

@@ -7,11 +7,13 @@ services:
       - "4566:4566"
       - "4571:4571"
     environment:
-      - SERVICES=s3
+      - SERVICES=s3,dynamodb,secretsmanager,lambda
       - DEBUG=1
       - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+      - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - "./.localstack:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
 
   backend:
     build:
@@ -23,11 +25,16 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - S3_BUCKET=ai-resume-cv-bucket
-      - S3_CV_PREFIX=${S3_CV_PREFIX:-cvs/}
-      - S3_RESUME_PREFIX=${S3_RESUME_PREFIX:-resumes/}
-      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://localstack:4566}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-pro}
+      - S3_CV_PREFIX=${S3_CV_PREFIX:-rawcvs/}
+      - S3_RESUME_PREFIX=${S3_RESUME_PREFIX:-processedresumes/}
+      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-http://localstack:4566}
+      - TRACE_TABLE=CvBuilderDb
+      - SECRETS_MANAGER_NAME=${SECRETS_MANAGER_NAME:-CvBuilderSecretsManager}
+      - LLM_PROVIDER=${LLM_PROVIDER:-hf_endpoint}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
+      - HF_API_TOKEN=${HF_API_TOKEN:-}
+      - HF_MODEL=${HF_MODEL:-Qwen/Qwen2.5-14B-Instruct-1M}
     depends_on:
       - localstack
     ports:
@@ -43,7 +50,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - S3_BUCKET=ai-resume-cv-bucket
-      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://localstack:4566}
+      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-http://localstack:4566}
     depends_on:
       - backend
     ports:

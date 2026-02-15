@@ -8,3 +8,4 @@ langchain-google-genai         # for Gemini
 langchain-huggingface          # for Hugging Face Inference API
 pydantic
 python-dotenv
+mangum                         # ASGI to AWS Lambda adapter

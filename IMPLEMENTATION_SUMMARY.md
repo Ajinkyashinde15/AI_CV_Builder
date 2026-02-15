@@ -19,7 +19,6 @@ You now have a **single, unified LangGraph pipeline** that handles the entire re
   - `node_write()` - DOCX file creation
   - `node_upload()` - S3 upload & cleanup
 - ✅ Built graph with proper edges: `extract → generate → write → upload → END`
-- ✅ Added `visualize_graph()` function for ASCII visualization
 - ✅ Enhanced error handling and logging at each node
 
 **Key improvements:**
@@ -161,11 +160,11 @@ curl http://localhost:8000/resume/graph-visualization
 ```
 API Request
     ↓
-    ├─ file_path: "cvs/john.docx"
+    ├─ file_path: "rawcvs/john.docx"
     ├─ job_description: "Senior Python Engineer..."
     ├─ bucket: "ai-resume-cv-bucket"
-    ├─ cv_prefix: "cvs/"
-    └─ resume_prefix: "resumes/"
+    ├─ cv_prefix: "rawcvs/"
+    └─ resume_prefix: "processedresumes/"
     ↓
 [EXTRACT NODE]
     ↓ Download from S3 → Read DOCX → Encode Base64 → LLM extraction
@@ -185,10 +184,10 @@ API Request
 [UPLOAD NODE]
     ↓ Upload to S3 → Delete temp file → Return key
     ↓
-    └─ output_key: "resumes/john_resume.docx"
+    └─ output_key: "processedresumes/john_resume.docx"
     ↓
 API Response
-    └─ output_key: "resumes/john_resume.docx"
+    └─ output_key: "processedresumes/john_resume.docx"
 ```
 
 ---
@@ -234,21 +233,14 @@ API Response
 
 ## 🚀 Quick Start
 
-### Run the Pipeline
-```python
-from app.core.graph import build_graph, visualize_graph
-
-# View the pipeline
-print(visualize_graph())
-
 # Build and run
 graph = build_graph()
 result = graph.invoke({
-    "file_path": "cvs/example.docx",
+    "file_path": "rawcvs/example.docx",
     "job_description": "Senior Python Engineer...",
     "bucket": "ai-resume-cv-bucket",
-    "cv_prefix": "cvs/",
-    "resume_prefix": "resumes/",
+    "cv_prefix": "rawcvs/",
+    "resume_prefix": "processedresumes/",
 })
 
 print(f"Generated resume: {result['output_key']}")
@@ -290,8 +282,8 @@ Resume Generation Pipeline
 [Graph visualization]
 ============================================================
 
-[1/2] Processing cvs/john.docx...
-[EXTRACT] Starting extraction from cvs/john.docx
+[1/2] Processing rawcvs/john.docx...
+[EXTRACT] Starting extraction from rawcvs/john.docx
 [EXTRACT] Downloaded to /tmp/john.docx
 [EXTRACT] Successfully extracted 3245 characters
 [GENERATE] Starting resume generation
@@ -299,11 +291,11 @@ Resume Generation Pipeline
 [WRITE] Starting DOCX creation
 [WRITE] DOCX written to /tmp/john_resume.docx
 [UPLOAD] Starting S3 upload
-[UPLOAD] Successfully uploaded to resumes/john_resume.docx
-✓ Successfully processed cvs/john.docx
+[UPLOAD] Successfully uploaded to processedresumes/john_resume.docx
+✓ Successfully processed rawcvs/john.docx
 
-[2/2] Processing cvs/jane.docx...
-✓ Successfully processed cvs/jane.docx
+[2/2] Processing rawcvs/jane.docx...
+✓ Successfully processed rawcvs/jane.docx
 
 ============================================================
 Pipeline Complete: 2/2 files processed

@@ -17,6 +17,7 @@ class State(TypedDict, total=False):
     bucket: str
     cv_prefix: str
     resume_prefix: str
+    api_unique_no: str
     
     # Processing
     cv_text: str
@@ -167,7 +168,7 @@ def node_upload(state: State) -> State:
         
         # Build output S3 key
         input_basename = os.path.basename(state["file_path"])
-        out_name = os.path.splitext(input_basename)[0] + "_resume.docx"
+        out_name = os.path.splitext(input_basename)[0] + "_"+state["api_unique_no"]+".docx"
         out_key = f"{state['resume_prefix']}{out_name}"
         
         # Upload to S3
@@ -216,39 +217,3 @@ def build_graph() -> Graph:
     g.add_edge("upload", END)
     
     return g.compile()
-
-
-def visualize_graph() -> str:
-    """
-    Generate ASCII art visualization of the graph structure.
-    """
-    graph = build_graph()
-    try:
-        # Try to get the graph visualization (LangGraph feature)
-        return graph.get_graph().draw_ascii()
-    except Exception:
-        # Fallback ASCII visualization
-        return """
-╔════════════════════════════════════════════════════════════╗
-║         Resume Generation Pipeline (LangGraph)             ║
-╠════════════════════════════════════════════════════════════╣
-║                                                            ║
-║  [Extract (LLM)]                                          ║
-║         ↓                                                  ║
-║  [Generate Tailored Resume (LLM)]                         ║
-║         ↓                                                  ║
-║  [Write DOCX]                                             ║
-║         ↓                                                  ║
-║  [Upload to S3]                                           ║
-║         ↓                                                  ║
-║      [END]                                                ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
-
-State Flow:
-  Input: file_path, job_description, bucket, cv_prefix, resume_prefix
-  Extract: cv_text ← LLM(DOCX binary)
-  Generate: resume_text ← LLM(cv_text + job_description)
-  Write: local_docx_path ← DOCX(resume_text)
-  Upload: output_key ← S3(local_docx_path)
-"""

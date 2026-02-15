@@ -8,7 +8,9 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     processed_keys: List[str]
     output_keys: List[str]
-
+    api_unique_no: str
+    generated_count: int
+    
 class ListCvsResponse(BaseModel):
     bucket: str
     prefix: str
