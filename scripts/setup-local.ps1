@@ -4,8 +4,8 @@ param(
   [string]$Region = "us-east-1",
   [string]$CvPrefix = "rawcvs/",
   [string]$ResumePrefix = "processedresumes/",
-  [string]$TableName = "CvBuilderDb",
-  [string]$SecretName = "CvBuilderSecretsManager",
+  [string]$TableName = "drc-core-dyn",
+  [string]$SecretName = "drc_secrets",
   [string]$HFApiToken = "",
   [string]$GeminiApiKey = "",
   [bool]$UploadSampleCvs = $true

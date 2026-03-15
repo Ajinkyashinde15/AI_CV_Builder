@@ -33,11 +33,11 @@ aws s3 ls s3://ai-resume-cv-bucket/processedresumes/
 ### DynamoDB
 ```bash
 # Scan trace table
-aws dynamodb scan --table-name CvBuilderDb
+aws dynamodb scan --table-name drc-core-dyn
 
 # Get specific trace
 aws dynamodb get-item \
-    --table-name CvBuilderDb \
+    --table-name drc-core-dyn \
     --key '{"pk":{"S":"REQUEST-ID"},"sk":{"S":"FILE-KEY"}}'
 ```
 
@@ -45,12 +45,12 @@ aws dynamodb get-item \
 ```bash
 # View secret
 aws secretsmanager get-secret-value \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --query SecretString --output text | jq
 
 # Update secret
 aws secretsmanager update-secret \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --secret-string '{"HF_API_TOKEN":"new_token","GEMINI_API_KEY":"new_key"}'
 ```
 
@@ -97,8 +97,8 @@ AWS_REGION=us-east-1
 S3_BUCKET=ai-resume-cv-bucket
 S3_CV_PREFIX=rawcvs/
 S3_RESUME_PREFIX=processedresumes/
-TRACE_TABLE=CvBuilderDb
-SECRETS_MANAGER_NAME=CvBuilderSecretsManager
+TRACE_TABLE=drc-core-dyn
+SECRETS_MANAGER_NAME=drc_secrets
 LLM_PROVIDER=hf_endpoint  # or "gemini"
 GEMINI_MODEL=gemini-1.5-flash
 HF_MODEL=Qwen/Qwen2.5-14B-Instruct-1M
@@ -182,11 +182,11 @@ aws iam get-role-policy \
 aws s3api head-bucket --bucket ai-resume-cv-bucket
 
 # DynamoDB table
-aws dynamodb describe-table --table-name CvBuilderDb
+aws dynamodb describe-table --table-name drc-core-dyn
 
 # Secrets
 aws secretsmanager describe-secret \
-    --secret-id CvBuilderSecretsManager
+    --secret-id drc_secrets
 
 # Lambda function
 aws lambda get-function --function-name cv-builder-dev
@@ -211,7 +211,7 @@ aws ecr delete-repository \
 
 # Delete secret
 aws secretsmanager delete-secret \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --force-delete-without-recovery
 ```
 
@@ -299,7 +299,7 @@ uvicorn app.main:app --reload
 ```bash
 # Ensure production secrets are configured
 aws secretsmanager update-secret \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --secret-string '{...PROD_KEYS...}'
 
 # Deploy

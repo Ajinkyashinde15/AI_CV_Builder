@@ -29,12 +29,12 @@ Parameters:
 
   DynamoDBTableName:
     Type: String
-    Default: CvBuilderDb
+    Default: drc-core-dyn
     Description: DynamoDB table for trace storage
 
   SecretsManagerName:
     Type: String
-    Default: CvBuilderSecretsManager
+    Default: drc_secrets
     Description: Secrets Manager secret name for API keys
 
   LLMProvider:

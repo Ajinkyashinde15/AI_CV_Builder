@@ -715,7 +715,7 @@ docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:lat
 ### Step 2: Create/Update Secrets in AWS Secrets Manager
 
 ```bash
-SECRET_NAME="CvBuilderSecretsManager"
+SECRET_NAME="drc_secrets"
 AWS_REGION="us-east-1"
 
 # Create secret with both API keys
@@ -859,8 +859,8 @@ AWS_REGION=us-east-1
 S3_BUCKET=ai-resume-cv-bucket
 S3_CV_PREFIX=rawcvs/
 S3_RESUME_PREFIX=processedresumes/
-TRACE_TABLE=CvBuilderDb
-SECRETS_MANAGER_NAME=CvBuilderSecretsManager
+TRACE_TABLE=drc-core-dyn
+SECRETS_MANAGER_NAME=drc_secrets
 LLM_PROVIDER=hf_endpoint  # or "gemini"
 GEMINI_MODEL=gemini-1.5-flash
 HF_MODEL=Qwen/Qwen2.5-14B-Instruct-1M
@@ -966,7 +966,7 @@ aws ecr delete-repository \
 
 # Delete Secrets Manager secret
 aws secretsmanager delete-secret \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --region us-east-1 \
     --force-delete-without-recovery
 ```

@@ -28,8 +28,8 @@ services:
       - S3_CV_PREFIX=${S3_CV_PREFIX:-rawcvs/}
       - S3_RESUME_PREFIX=${S3_RESUME_PREFIX:-processedresumes/}
       - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-http://localstack:4566}
-      - TRACE_TABLE=CvBuilderDb
-      - SECRETS_MANAGER_NAME=${SECRETS_MANAGER_NAME:-CvBuilderSecretsManager}
+      - TRACE_TABLE=drc-core-dyn
+      - SECRETS_MANAGER_NAME=${SECRETS_MANAGER_NAME:-drc_secrets}
       - LLM_PROVIDER=${LLM_PROVIDER:-hf_endpoint}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}

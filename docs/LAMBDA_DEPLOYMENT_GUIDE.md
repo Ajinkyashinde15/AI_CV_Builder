@@ -159,7 +159,7 @@ aws s3api put-public-access-block \
 #### c) Create DynamoDB Table
 ```bash
 aws dynamodb create-table \
-    --table-name CvBuilderDb \
+    --table-name drc-core-dyn \
     --attribute-definitions \
         AttributeName=pk,AttributeType=S \
         AttributeName=sk,AttributeType=S \
@@ -173,7 +173,7 @@ aws dynamodb create-table \
 #### d) Create Secrets Manager Secret
 ```bash
 aws secretsmanager create-secret \
-    --name CvBuilderSecretsManager \
+    --name drc_secrets \
     --description "API keys for CV Builder" \
     --secret-string '{
         "HF_API_TOKEN": "hf_xxxxxxxxxxxxxxxxxxx",
@@ -323,7 +323,7 @@ cd .\scripts
 ```bash
 # Update secret value
 aws secretsmanager update-secret \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --secret-string '{
         "HF_API_TOKEN": "new_token_here",
         "GEMINI_API_KEY": "new_key_here"
@@ -332,7 +332,7 @@ aws secretsmanager update-secret \
 
 # Views current secret
 aws secretsmanager get-secret-value \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --region us-east-1 \
     --query SecretString \
     --output text | jq '.'
@@ -343,7 +343,7 @@ aws secretsmanager get-secret-value \
 ```bash
 # Automatic rotation can be configured
 aws secretsmanager rotate-secret \
-    --secret-id CvBuilderSecretsManager \
+    --secret-id drc_secrets \
     --rotation-rules AutomaticallyAfterDays=30
 ```
 
@@ -366,7 +366,7 @@ LLM_PROVIDER=hf_endpoint
 ENV=dev
 AWS_REGION=us-east-1
 S3_BUCKET=ai-resume-cv-bucket
-SECRETS_MANAGER_NAME=CvBuilderSecretsManager
+SECRETS_MANAGER_NAME=drc_secrets
 LLM_PROVIDER=hf_endpoint
 ```
 
@@ -375,9 +375,9 @@ LLM_PROVIDER=hf_endpoint
 ENV=dev
 AWS_REGION=us-east-1
 S3_BUCKET=ai-resume-cv-bucket-prod
-SECRETS_MANAGER_NAME=CvBuilderSecretsManager
+SECRETS_MANAGER_NAME=drc_secrets
 LLM_PROVIDER=gemini  # or hf_endpoint
-TRACE_TABLE=CvBuilderDb-prod
+TRACE_TABLE=drc-core-dyn-prod
 ```
 
 ### Configuration Files
@@ -514,17 +514,17 @@ docker push $IMAGE_URI
 ```
 
 #### 3. "Secrets Manager secret not found"
-**Error:** `ResourceNotFoundException` for CvBuilderSecretsManager
+**Error:** `ResourceNotFoundException` for drc_secrets
 
 **Solution:**
 ```bash
 # Verify secret exists
 aws secretsmanager describe-secret \
-    --secret-id CvBuilderSecretsManager
+    --secret-id drc_secrets
 
 # Create if missing
 aws secretsmanager create-secret \
-    --name CvBuilderSecretsManager \
+    --name drc_secrets \
     --secret-string '{...}'
 ```
 
@@ -534,11 +534,11 @@ aws secretsmanager create-secret \
 **Solution:**
 ```bash
 # Check table status
-aws dynamodb describe-table --table-name CvBuilderDb
+aws dynamodb describe-table --table-name drc-core-dyn
 
 # Increase capacity (if using provisioned billing)
 aws dynamodb update-table \
-    --table-name CvBuilderDb \
+    --table-name drc-core-dyn \
     --provisioned-throughput ReadCapacityUnits=100,WriteCapacityUnits=100
 ```
 

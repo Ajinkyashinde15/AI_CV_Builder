@@ -72,7 +72,7 @@ def get_secrets_from_manager(secret_name: str, region: str, endpoint_url: str | 
     On cold starts, fetches from Secrets Manager.
     
     Args:
-        secret_name: Name of the secret in Secrets Manager (e.g., 'CvBuilderSecretsManager')
+        secret_name: Name of the secret in Secrets Manager (e.g., 'drc_secrets')
         region: AWS region
         endpoint_url: LocalStack endpoint (for local dev)
     
@@ -147,7 +147,7 @@ class Settings:
         AWS_ENDPOINT_URL = "http://localhost:4566"
     
     # Secrets Manager
-    SECRETS_MANAGER_NAME: str = os.getenv("SECRETS_MANAGER_NAME", "CvBuilderSecretsManager")
+    SECRETS_MANAGER_NAME: str = os.getenv("SECRETS_MANAGER_NAME", "drc_secrets")
     
     # S3 Configuration
     S3_BUCKET: str = os.getenv("S3_BUCKET", "ai-resume-cv-bucket")
@@ -155,7 +155,7 @@ class Settings:
     S3_RESUME_PREFIX: str = os.getenv("S3_RESUME_PREFIX", "processedresumes/")
     
     # DynamoDB (trace)
-    TRACE_TABLE: str = os.getenv("TRACE_TABLE", "CvBuilderDb")
+    TRACE_TABLE: str = os.getenv("TRACE_TABLE", "drc-core-dyn")
     
     # LLM Provider selector ("gemini" or "hf_endpoint")
     LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "hf_endpoint").lower()

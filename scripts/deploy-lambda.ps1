@@ -16,8 +16,8 @@ function Write-Err { param([string]$Message) Write-Host "ERROR: $Message" -Foreg
 # Configuration
 $ECR_REPO_NAME = "cv-builder"
 $S3_BUCKET_NAME = "ai-resume-cv-bucket"
-$DYNAMODB_TABLE = "CvBuilderDb"
-$SECRETS_NAME = "CvBuilderSecretsManager"
+$DYNAMODB_TABLE = "drc-core-dyn"
+$SECRETS_NAME = "drc_secrets"
 
 Write-Host "`n" -ForegroundColor Green
 Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green

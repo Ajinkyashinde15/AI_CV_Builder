@@ -40,7 +40,7 @@ class ResumeTraceStore:
         endpoint_url: Optional[str] = None,
         boto3_session: Optional[boto3.session.Session] = None,
     ) -> None:
-        self.table_name = table_name or os.getenv("TRACE_TABLE", "CvBuilderDb")
+        self.table_name = table_name or os.getenv("TRACE_TABLE", "drc-core-dyn")
         self.region_name = region_name or os.getenv("AWS_REGION", "us-east-1")
         self.endpoint_url = endpoint_url or os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
 
